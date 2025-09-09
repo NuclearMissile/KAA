@@ -11,34 +11,31 @@ class KAATest {
     companion object {
         const val RECURSE_ITERATIONS = 10000L
         val VT_EXECUTOR: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-    }
 
-    fun userIdsFromDb(): CompletableFuture<List<Long>> {
-        return CompletableFuture.supplyAsync({
-            Thread.sleep(1000)
-            listOf(1L, 2L, 3L)
-        }, VT_EXECUTOR)
-    }
+        fun userIdsFromDb(): CompletableFuture<List<Long>> {
+            return CompletableFuture.supplyAsync({
+                Thread.sleep(1000)
+                listOf(1L, 2L, 3L)
+            }, VT_EXECUTOR)
+        }
 
-    fun userNamesFromSomeApi(userId: Long): CompletableFuture<String> {
-        return CompletableFuture.supplyAsync({
-            Thread.sleep(1000)
-            "User $userId"
-        }, VT_EXECUTOR)
-    }
+        fun userNamesFromSomeApi(userId: Long): CompletableFuture<String> {
+            return CompletableFuture.supplyAsync({
+                Thread.sleep(1000)
+                "User $userId"
+            }, VT_EXECUTOR)
+        }
 
-    fun buildPdf(userNames: List<String>): CompletableFuture<ByteArray> {
-        return CompletableFuture.supplyAsync { userNames.joinToString().toByteArray() }
+        fun buildPdf(userNames: List<String>): CompletableFuture<ByteArray> {
+            return CompletableFuture.supplyAsync { userNames.joinToString().toByteArray() }
+        }
     }
 
     @Test
     fun testSimpleAsyncAwait() {
         val future = async {
             val userIds = await(userIdsFromDb())
-            val userNames = userIds
-                .map { id -> await(userNamesFromSomeApi(id)) }
-                .toList()
-
+            val userNames = userIds.map { id -> await(userNamesFromSomeApi(id)) }
             val pdf = await(buildPdf(userNames))
 
             println("Generated pdf for user ids: $userIds")
