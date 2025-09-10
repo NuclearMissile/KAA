@@ -1,8 +1,10 @@
 import KAA.Companion.async
 import KAA.Companion.await
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletableFuture.completedFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.test.Test
@@ -15,10 +17,9 @@ class KAATest {
     companion object {
         // Number of iterations for recursive test cases
         const val RECURSE_ITERATIONS = 10000L
-
-        // Virtual thread executor for CompletableFuture operations
+        // Virtual thread executor for IO bond operations
         val VT_EXECUTOR: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
-
+        // Thread pool executor for CPU bond operations
         val TP_EXECUTOR: ExecutorService = Executors.newCachedThreadPool()
 
         /**
@@ -68,6 +69,18 @@ class KAATest {
                 "vt-${Thread.currentThread().threadId()}" else Thread.currentThread().name
             println("$threadName: $message")
         }
+    }
+    
+    /**
+     * Tests exception handling in async blocks.
+     * Verifies that exceptions thrown within async blocks are properly wrapped
+     * in CompletionException when the CompletableFuture is joined.
+     */
+    @Test
+    fun testException() {
+        val future = async { throw Exception("Test exception") }
+        
+        assertThrows<CompletionException> { future.join() }
     }
 
     /**
