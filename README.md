@@ -49,7 +49,7 @@ val cleanFuture = async {
 // Execute multiple async operations concurrently
 val result = async {
     val futures = (1..10).map { id -> async { fetchUserData(id) } }
-    futures.map { await(it) } // Wait for all to complete
+    futures.map(::await) // Wait for all to complete
 }
 ```
 
@@ -60,13 +60,13 @@ val processedData = async {
     // I/O operation
     val rawData = await(async { fetchDataFromAPI() })
     
-    // CPU-intensive operation on thread pool
+    // CPU-intensive operation on a thread pool
     val processed = rawData.map { data ->
         CompletableFuture.supplyAsync({ processData(data) }, cpuExecutor)
     }
     
     // Await all processing
-    processed.map { await(it) }
+    processed.map(::await)
 }
 ```
 
@@ -109,24 +109,16 @@ This approach allows virtual threads to be parked efficiently without blocking O
 
 ## Examples
 
-### Database + API + Processing Pipeline
+### Database + API + CPU-bond operation
 
 ```kotlin
-val result = async {
-    // Fetch user IDs from database (1 second)
-    val userIds = await(async { findUserIdsFromDB() })
-    
-    // Fetch user details concurrently (1 second total, not 3 seconds)
-    val userDetails = userIds.map { id -> 
-        async { fetchUserDetailsFromAPI(id) }
-    }.map { await(it) }
-    
-    // Process data on CPU thread pool
-    val processedUsers = userDetails.map { user ->
-        CompletableFuture.supplyAsync({ encryptUserData(user) }, cpuExecutor)
-    }.map { await(it) }
-    
-    processedUsers
+val future = async {
+    val userIds = async { findUserIds() }
+    val userNames = await(userIds).map { id -> async { fetchUserName(id) } }
+    userNames.map {
+        val name = await(it)
+        CompletableFuture.supplyAsync({ encryptUserName(name) }, TP_EXECUTOR)
+    }.joinToString { await(it) }
 }
 ```
 
