@@ -5,13 +5,13 @@ import java.util.concurrent.locks.ReentrantLock
 
 class KAA {
     companion object {
-        private val AWAIT_CONTEXT: ScopedValue<Cont> = ScopedValue.newInstance()
+        private val CONTEXT_HOLDER: ScopedValue<Context> = ScopedValue.newInstance()
 
         fun <A> async(fn: Callable<A>): CompletableFuture<A> =
             CompletableFuture<A>().also { cf ->
                 Thread.startVirtualThread {
                     try {
-                        ScopedValue.where(AWAIT_CONTEXT, Cont()).run {
+                        ScopedValue.where(CONTEXT_HOLDER, Context()).run {
                             try {
                                 cf.complete(fn.call())
                             } catch (e: Exception) {
@@ -25,12 +25,12 @@ class KAA {
             }
 
         fun <A> await(cf: CompletableFuture<A>): A =
-            AWAIT_CONTEXT
+            CONTEXT_HOLDER
                 .orElseThrow { IllegalStateException("await must be called within an async block") }
                 .await(cf)
     }
 
-    private class Cont {
+    private class Context {
         private val lock = ReentrantLock()
         private val cond = lock.newCondition()
 

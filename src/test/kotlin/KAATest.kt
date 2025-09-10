@@ -7,94 +7,145 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.test.Test
 
+/**
+ * Test class for the KAA async/await library functionality.
+ * Tests various scenarios including concurrent execution, recursive calls, and performance comparisons.
+ */
 class KAATest {
     companion object {
+        // Number of iterations for recursive test cases
         const val RECURSE_ITERATIONS = 10000L
+
+        // Virtual thread executor for CompletableFuture operations
         val VT_EXECUTOR: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
 
-        fun userIdsFromDb(): CompletableFuture<List<Long>> {
-            return CompletableFuture.supplyAsync({
-                Thread.sleep(1000)
-                listOf(1L, 2L, 3L)
-            }, VT_EXECUTOR)
+        val TP_EXECUTOR: ExecutorService = Executors.newCachedThreadPool()
+
+        /**
+         * Simulates fetching user IDs from a database or API.
+         * Includes a 1-second delay to simulate I/O operations.
+         * @return List of user IDs (1, 2, 3)
+         */
+        fun findUserIds(): List<Long> {
+            Thread.sleep(1000)
+            printThreadName("findUserIds...")
+            return listOf(1L, 2L, 3L)
         }
 
-        fun userNamesFromSomeApi(userId: Long): CompletableFuture<String> {
-            return CompletableFuture.supplyAsync({
-                Thread.sleep(1000)
-                "User $userId"
-            }, VT_EXECUTOR)
+        /**
+         * Simulates fetching a user name based on user ID.
+         * Includes a 1-second delay to simulate I/O operations.
+         * @param userId The ID of the user to fetch
+         * @return The user name as a string
+         */
+        fun fetchUserName(userId: Long): String {
+            Thread.sleep(1000)
+            printThreadName("fetchUserName for userId: $userId")
+            return "User $userId"
         }
 
-        fun buildPdf(userNames: List<String>): CompletableFuture<ByteArray> {
-            return CompletableFuture.supplyAsync { userNames.joinToString().toByteArray() }
+        /**
+         * Simulates encrypting a user name with CPU-intensive work.
+         * Uses busy waiting for 500ms to simulate encryption processing.
+         * @param userName The user name to encrypt
+         * @return The encrypted user name with "encrypted: " prefix
+         */
+        fun encryptUserName(userName: String): String {
+            val startNano = System.nanoTime()
+            while (System.nanoTime() - startNano < 5e8) {
+            } // Busy wait for 500ms
+            printThreadName("encrypt for userName: $userName")
+            return "encrypted: $userName"
+        }
+
+        /**
+         * Utility function to print the current thread name with a message.
+         * Formats virtual threads with "vt-" prefix and thread ID.
+         * @param message Optional message to print along with thread name
+         */
+        fun printThreadName(message: String = "") {
+            val threadName = if (Thread.currentThread().isVirtual)
+                "vt-${Thread.currentThread().threadId()}" else Thread.currentThread().name
+            println("$threadName: $message")
         }
     }
 
+    /**
+     * Tests the KAA async/await functionality with a complex workflow.
+     * 1. Fetches user IDs asynchronously
+     * 2. Maps each ID to fetch user names concurrently
+     * 3. Encrypts each user name and joins results
+     * Verifies that the async/await syntax produces expected results.
+     */
     @Test
-    fun testSimpleAsyncAwait() {
+    fun testWithAsyncAwait() {
         val future = async {
-            val userIds = await(userIdsFromDb())
-            val userNames = userIds.map { id -> await(userNamesFromSomeApi(id)) }
-            val pdf = await(buildPdf(userNames))
-
-            println("Generated pdf for user ids: $userIds")
-            pdf
+            val userIds = async { findUserIds() }
+            val userNames = await(userIds).map { id -> async { fetchUserName(id) } }
+            userNames.map {
+                val name = await(it)
+                CompletableFuture.supplyAsync({ encryptUserName(name) }, TP_EXECUTOR)
+            }.joinToString { await(it) }
         }
 
-        assertEquals(22, future.join().size)
+        assertEquals("encrypted: User 1, encrypted: User 2, encrypted: User 3", future.join())
     }
 
+    /**
+     * Equivalent test using raw CompletableFuture API for comparison.
+     * Performs the same workflow as testWithAsyncAwait but uses
+     * CompletableFuture.thenCompose() and thenApply() chains.
+     * Demonstrates how KAA simplifies asynchronous code.
+     */
     @Test
-    fun testSimple() {
-        val userPdf = userIdsFromDb().thenCompose { userIds ->
-            var userNamesFuture = CompletableFuture.supplyAsync { mutableListOf<String>() }
-            for (userId in userIds) {
-                userNamesFuture = userNamesFuture.thenCompose { list ->
-                    userNamesFromSomeApi(userId).thenApply { userName ->
-                        list.add(userName)
-                        list
-                    }
+    fun testWithCF() {
+        val future = CompletableFuture.supplyAsync({ findUserIds() }, VT_EXECUTOR)
+            .thenCompose { ids ->
+                val nameFutures = ids.map { id ->
+                    CompletableFuture.supplyAsync({ fetchUserName(id) }, VT_EXECUTOR)
                 }
+                CompletableFuture.allOf(*nameFutures.toTypedArray())
+                    .thenApply { nameFutures.map { it.join() } }
             }
-            userNamesFuture.thenCompose { userNames ->
-                buildPdf(userNames).thenApply { pdf ->
-                    println("Generated pdf for user ids: $userIds")
-                    pdf
+            .thenCompose { names ->
+                val encryptedFutures = names.map { name ->
+                    CompletableFuture.supplyAsync({ encryptUserName(name) }, TP_EXECUTOR)
                 }
+                CompletableFuture.allOf(*encryptedFutures.toTypedArray())
+                    .thenApply { encryptedFutures.joinToString { it.join() } }
             }
-        }
 
-        assertEquals(22, userPdf.toCompletableFuture().join().size)
+        assertEquals("encrypted: User 1, encrypted: User 2, encrypted: User 3", future.join())
     }
 
+
+    /**
+     * Tests concurrent execution of multiple async operations.
+     * Creates 10 concurrent fetchUserName operations and awaits all results.
+     * Verifies that operations run concurrently and return expected results.
+     */
     @Test
-    fun testAwaitNesting() {
-        val future = async {
-            val ids1 = await(userIdsFromDb())
-            val ids2 = await(async { await(userIdsFromDb()) })
-            ids1.size + ids2.size
-        }
+    fun testConcurrentAwait() {
+        val future = async { (1..10L).map { async { fetchUserName(it) } }.map(::await) }
 
-        assertEquals(6L, future.join().toLong())
-    }
-
-    @Test
-    fun testAwaitForLoop() {
-        val future = async {
-            val userNames = mutableListOf<String>()
-            for (userId in 1..10L) {
-                userNames.add(await(userNamesFromSomeApi(userId)))
-            }
-            userNames[userNames.size - 1]
-        }
-
-        assertEquals("User 10", future.join())
+        assertEquals("User 10", future.join().last())
     }
 
 
+    /**
+     * Tests recursive async operations with deep call stacks.
+     * Recursively calls async functions 10,000 times to verify
+     * that the library handles deep recursion without stack overflow.
+     * This tests the library's ability to handle complex async chains.
+     */
     @Test
     fun testRecursiveAwait() {
+        /**
+         * Recursive helper function that creates a chain of async operations.
+         * @param iterations Number of remaining iterations
+         * @param result Current accumulated result
+         * @return CompletableFuture containing the final result
+         */
         fun recurseAsync(iterations: Long, result: Long): CompletableFuture<Long> {
             return async {
                 if (iterations == 0L) {
@@ -107,6 +158,7 @@ class KAATest {
         }
 
         val future = recurseAsync(RECURSE_ITERATIONS, 0)
+
         assertEquals(RECURSE_ITERATIONS, future.join())
     }
 }
