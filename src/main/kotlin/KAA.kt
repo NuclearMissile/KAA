@@ -30,6 +30,7 @@ class KAA {
             CompletableFuture<A>().also { cf ->
                 // Start a new virtual thread for each async operation
                 Thread.startVirtualThread {
+                    Thread.currentThread().name = "async-vt-${Thread.currentThread().threadId()}"
                     try {
                         // Establish scoped context for this async operation
                         ScopedValue.where(CONTEXT_HOLDER, Context()).run {

@@ -65,8 +65,7 @@ class KAATest {
          * @param message Optional message to print along with thread name
          */
         fun printThreadName(message: String = "") {
-            val threadName = if (Thread.currentThread().isVirtual)
-                "vt-${Thread.currentThread().threadId()}" else Thread.currentThread().name
+            val threadName = Thread.currentThread().name.ifEmpty { "vt-${Thread.currentThread().threadId()}" }
             println("$threadName: $message")
         }
     }
