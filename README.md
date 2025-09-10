@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="logo.svg" alt="KAA Logo" width="200" height="200">
+</div>
+
 # KAA - Kotlin Async/Await
 
 A lightweight Kotlin library that brings async/await syntax to Java's CompletableFuture, leveraging Java 21's virtual threads for efficient concurrent programming.
