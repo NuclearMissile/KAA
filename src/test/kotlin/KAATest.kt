@@ -129,20 +129,33 @@ class KAATest {
 
         assertEquals("encrypted: User 1, encrypted: User 2, encrypted: User 3", future.join())
     }
-
-
+    
     /**
-     * Tests concurrent execution of multiple async operations.
-     * Creates 10 concurrent fetchUserName operations and awaits all results.
-     * Verifies that operations run concurrently and return expected results.
+     * Tests concurrent execution of 1 million async operations using KAA await.
+     * Creates a large number of concurrent async tasks and verifies that they
+     * all complete successfully. This tests the library's scalability and
+     * ability to handle massive concurrent workloads.
      */
     @Test
     fun testConcurrentAwait() {
-        val future = async { (1..10L).map { async { fetchUserName(it) } }.map(::await) }
+        val future = async { (1..1e6.toLong()).map { async { fetchUserName(it) } }.map(::await) }
 
-        assertEquals("User 10", future.join().last())
+        assertEquals("User ${1e6.toLong()}", future.join().last())
     }
-
+    
+    /**
+     * Equivalent concurrent test using raw CompletableFuture API for comparison.
+     * Creates 1 million concurrent CompletableFutures and waits for all to complete.
+     * This serves as a performance baseline to compare against the KAA library
+     * and demonstrates the difference in code complexity.
+     */
+    @Test
+    fun testConcurrentCF() {
+        val futures = (1..1e6.toLong()).map { CompletableFuture.supplyAsync({ fetchUserName(it) }, VT_EXECUTOR) }
+        CompletableFuture.allOf(*futures.toTypedArray()).join()
+        
+        assertEquals("User ${1e6.toLong()}", futures.last().join())
+    }
 
     /**
      * Tests recursive async operations with deep call stacks.
