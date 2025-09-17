@@ -34,13 +34,7 @@ class KAA {
                     try {
                         // Establish scoped context for this async operation
                         ScopedValue.where(CONTEXT_HOLDER, Context()).run {
-                            try {
-                                // Execute the user's callable and complete the future
-                                cf.complete(fn.call())
-                            } catch (e: Exception) {
-                                // Propagate exceptions through the CompletableFuture
-                                cf.completeExceptionally(e)
-                            }
+                            cf.complete(fn.call())
                         }
                     } catch (t: Throwable) {
                         // Handle any unexpected throwables

@@ -17,8 +17,10 @@ class KAATest {
     companion object {
         // Number of iterations for recursive test cases
         const val RECURSE_ITERATIONS = 10000L
+
         // Virtual thread executor for IO bond operations
         val VT_EXECUTOR: ExecutorService = Executors.newVirtualThreadPerTaskExecutor()
+
         // Thread pool executor for CPU bond operations
         val TP_EXECUTOR: ExecutorService = Executors.newCachedThreadPool()
 
@@ -69,7 +71,7 @@ class KAATest {
             println("$threadName: $message")
         }
     }
-    
+
     /**
      * Tests exception handling in async blocks.
      * Verifies that exceptions thrown within async blocks are properly wrapped
@@ -78,7 +80,7 @@ class KAATest {
     @Test
     fun testException() {
         val future = async { throw Exception("Test exception") }
-        
+
         assertThrows<CompletionException> { future.join() }
     }
 
@@ -129,7 +131,7 @@ class KAATest {
 
         assertEquals("encrypted: User 1, encrypted: User 2, encrypted: User 3", future.join())
     }
-    
+
     /**
      * Tests concurrent execution of 1 million async operations using KAA await.
      * Creates a large number of concurrent async tasks and verifies that they
@@ -142,7 +144,7 @@ class KAATest {
 
         assertEquals("User ${1e6.toLong()}", future.join().last())
     }
-    
+
     /**
      * Equivalent concurrent test using raw CompletableFuture API for comparison.
      * Creates 1 million concurrent CompletableFutures and waits for all to complete.
@@ -153,7 +155,7 @@ class KAATest {
     fun testConcurrentCF() {
         val futures = (1..1e6.toLong()).map { CompletableFuture.supplyAsync({ fetchUserName(it) }, VT_EXECUTOR) }
         CompletableFuture.allOf(*futures.toTypedArray()).join()
-        
+
         assertEquals("User ${1e6.toLong()}", futures.last().join())
     }
 
